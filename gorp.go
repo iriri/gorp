@@ -2,23 +2,39 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
-func search(r *regexp.Regexp, s *bufio.Scanner, c chan string) {
+func search(r *regexp.Regexp, s *bufio.Scanner, nf bool, c chan string) {
+	n := 0
+	ss := make([]string, 3)
+	ss[1] = ": "
 	for s.Scan() {
+		n++
 		if r.FindString(s.Text()) != "" {
-			c <- s.Text()
+			if nf {
+				ss[0] = strconv.Itoa(n)
+				ss[2] = s.Text()
+				c <- strings.Join(ss, "")
+			} else {
+				c <- s.Text()
+			}
 		}
 	}
 	close(c)
 }
 
 func main() {
-	r, err := regexp.Compile(strings.Replace(os.Args[1], "\\|", "|", -1))
+	var nf bool
+	flag.BoolVar(&nf, "n", false, "displays file names and line numbers")
+	flag.Parse()
+
+	r, err := regexp.Compile(strings.Replace(os.Args[2], "\\|", "|", -1))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid regexp, probably\n")
 		panic(err)
@@ -26,8 +42,8 @@ func main() {
 
 	var f *os.File
 	var scn *bufio.Scanner
-	cs := make([]chan string, len(os.Args)-2)
-	for i, s := range os.Args[2:] {
+	cs := make([]chan string, len(os.Args)-3)
+	for i, s := range os.Args[3:] {
 		f, err = os.Open(s)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "invalid filepath, probably\n")
@@ -37,7 +53,7 @@ func main() {
 
 		scn = bufio.NewScanner(bufio.NewReader(f))
 		cs[i] = make(chan string, 128)
-		go search(r, scn, cs[i])
+		go search(r, scn, nf, cs[i])
 	}
 
 	for _, c := range cs {
