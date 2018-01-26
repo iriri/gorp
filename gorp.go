@@ -36,7 +36,7 @@ func main() {
 		defer f.Close()
 
 		scn = bufio.NewScanner(bufio.NewReader(f))
-		cs[i] = make(chan string)
+		cs[i] = make(chan string, 128)
 		go search(r, scn, cs[i])
 	}
 
