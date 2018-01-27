@@ -2,8 +2,8 @@ package main
 
 import (
 	"bufio"
-	"flag"
 	"fmt"
+	"github.com/iriri/minimal/flag"
 	"os"
 	"regexp"
 	"strconv"
@@ -16,11 +16,12 @@ type flagSet struct {
 	r bool
 }
 
-func parseFlags() *flagSet {
+func parseFlags() (int, *flagSet) {
 	var flags flagSet
-	flag.BoolVar(&flags.n, "n", false, "displays file names and line numbers")
-	flag.Parse()
-	return &flags
+	flag.Bool(&flags.i, false, "case insensitive matching", "", 'i')
+	flag.Bool(&flags.n, false, "print filenames and line numbers", "", 'n')
+	flag.Bool(&flags.r, false, "gorp directories recursively", "", 'r')
+	return flag.Parse(1), &flags
 }
 
 func search(r *regexp.Regexp, fname string, flags *flagSet, c chan string) {
@@ -29,8 +30,8 @@ func search(r *regexp.Regexp, fname string, flags *flagSet, c chan string) {
 		fmt.Fprintf(os.Stderr, "invalid filepath, probably\n")
 		panic(err)
 	}
-	defer f.Close()
 	scn := bufio.NewScanner(bufio.NewReader(f))
+	defer f.Close()
 
 	s := []string{fname, " ", "", ": ", ""}
 	for n := 1; scn.Scan(); n++ {
@@ -48,18 +49,18 @@ func search(r *regexp.Regexp, fname string, flags *flagSet, c chan string) {
 }
 
 func main() {
-	flags := parseFlags()
+	first, flags := parseFlags()
 
-	r, err := regexp.Compile(strings.Replace(os.Args[2], "\\|", "|", -1))
+	regex, err := regexp.Compile(os.Args[first])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid regexp, probably\n")
 		panic(err)
 	}
 
-	cs := make([]chan string, len(os.Args)-3)
-	for i, s := range os.Args[3:] {
+        cs := make([]chan string, len(os.Args[first + 1:]))
+	for i, s := range os.Args[first + 1:] {
 		cs[i] = make(chan string, 128)
-		go search(r, s, flags, cs[i])
+		go search(regex, s, flags, cs[i])
 	}
 
 	for _, c := range cs {
