@@ -3,10 +3,10 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io"
 	// "github.com/iriri/minimal/color" // more NIH syndrome coming soon
 	"github.com/iriri/minimal/flag"
-	"github.com/iriri/minimal/globconv"
+	"github.com/iriri/minimal/gitignore"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -47,53 +47,6 @@ func parseFlags() (int, *flagSet) {
 	return flag.Parse(1), &opt
 }
 
-func appendLines(s string, ss []string) []string {
-	f, err := os.Open(s)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "yeah idk why this would happen")
-		panic(err)
-	}
-	scn := bufio.NewScanner(bufio.NewReader(f))
-	for scn.Scan() {
-		ss = append(ss, globconv.Gtor(scn.Text(), true))
-	}
-	return ss
-}
-
-func filterInput(fnames []string, opt *flagSet) []string {
-	if !opt.g && !opt.git {
-		return fnames
-	}
-	ss := make([]string, 0, 32)
-	if opt.g {
-		if _, err := os.Stat(".gorpignore"); err == nil {
-			ss = appendLines(".gorpignore", ss)
-		} else if _, err = os.Stat("~/.gorpignore"); err == nil {
-			ss = appendLines("~/.gorpignore", ss)
-		}
-	}
-	if opt.git {
-		if _, err := os.Stat(".gitignore"); err == nil {
-			ss = appendLines(".gitignore", ss)
-		} else if _, err := os.Stat("~/.gitignore"); err == nil {
-			ss = appendLines("~/.gitignore", ss)
-		}
-	}
-
-	regex, err := regexp.Compile(strings.Join(ss, "|"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "invalid regex in .*ignore file, probably")
-		panic(err)
-	}
-	res := make([]string, 0, len(fnames))
-	for _, s := range fnames {
-		if regex.FindString(s) == "" {
-			res = append(res, s)
-		}
-	}
-	return res
-}
-
 func isPiped() bool {
 	stat, err := os.Stdin.Stat()
 	if err != nil {
@@ -118,22 +71,50 @@ func setOptions(first int, opt *flagSet) (*regexp.Regexp, []string) {
 		return regex, os.Args[0:1]
 	}
 
+	var ign gitignore.Ignore
+	if opt.g {
+		if _, err := os.Stat(".gorpignore"); err == nil {
+			ign, _ = gitignore.From(".gorpignore")
+		}
+	}
+	if opt.git {
+		ign = gitignore.New()
+		if _, err := os.Stat(".gitignore"); err == nil {
+			ign.Append(".gitignore")
+		}
+		if _, err := os.Stat("/.gitignore_global"); err == nil {
+			ign.Append("/.gitignore_global")
+		}
+	}
+
 	if opt.r {
 		fnames := make([]string, 0, len(os.Args[first+1:])*4)
+		fn := func(path string, info os.FileInfo, err error) error {
+			fnames = append(fnames, path)
+			return err
+		}
 		for _, s := range os.Args[first+1:] {
-			err := filepath.Walk(s,
-				func(path string, f os.FileInfo,
-					err error) error {
-					fnames = append(fnames, path)
-					return err
-				})
+			if ign != nil {
+				err = gitignore.Walk(s, ign, true, fn)
+			} else {
+				err = filepath.Walk(s, fn)
+			}
 			if err != nil {
 				panic(err)
 			}
 		}
-		return regex, filterInput(fnames, opt)
+		return regex, fnames
+	} else if ign != nil {
+		fnames := make([]string, 0, len(os.Args[first+1:]))
+		for _, s := range os.Args[first+1:] {
+			if !ign.Match(s) {
+				fnames = append(fnames, s)
+			}
+		}
+		return regex, fnames
 	}
-	return regex, filterInput(os.Args[first+1:], opt)
+
+	return regex, os.Args[first+1:]
 }
 
 func isBinary(f *os.File) bool {
