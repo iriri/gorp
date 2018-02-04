@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
@@ -28,7 +29,8 @@ type flagSet struct {
 	v bool
 	// bcpl  bool
 	// color bool
-	git bool
+	fibers int
+	git    bool
 }
 
 func parseFlags() (int, *flagSet) {
@@ -44,6 +46,7 @@ func parseFlags() (int, *flagSet) {
 	flag.Bool(&opt.v, false, "invert match", "", 'v')
 	// flag.Bool(&opt.bcpl, false, "curly brace mode", "bcpl", 0)
 	// flag.Bool(&opt.color, false, "highlight matches", "color", 0)
+	flag.Int(&opt.fibers, 4, "files to search concurrently", "fibers", 0)
 	flag.Bool(&opt.git, false, "ignore files in .gitignore", "git", 0)
 	return flag.Parse(1), &opt
 }
@@ -187,28 +190,38 @@ func search(r *regexp.Regexp, fname string, opt *flagSet, c chan string) {
 	match(r, fname, opt, c, scn)
 }
 
-func main() {
-	first, opt := parseFlags()
-	regex, fnames := setOptions(first, opt)
-
-	cs := make([]chan string, 0, len(fnames))
-	if isPiped() {
-		cs = append(cs, make(chan string, 16))
-		scn := bufio.NewScanner(bufio.NewReader(os.Stdin))
-		scn.Split(scanLines)
-		go match(regex, "", opt, cs[0], scn)
-	} else {
-		for i, s := range fnames {
-			cs = append(cs, make(chan string, 128))
-			go search(regex, s, opt, cs[i])
-		}
-	}
-
+func write(cc chan chan string, wg *sync.WaitGroup) {
+	defer wg.Done()
 	w := bufio.NewWriter(os.Stdout)
 	defer w.Flush()
-	for _, c := range cs {
+	for c := range cc {
 		for s := range c {
 			w.WriteString(s)
 		}
 	}
+}
+
+func main() {
+	first, opt := parseFlags()
+	regex, fnames := setOptions(first, opt)
+
+	cc := make(chan chan string, opt.fibers)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go write(cc, &wg)
+	if isPiped() {
+		c := make(chan string, 128)
+		scn := bufio.NewScanner(bufio.NewReader(os.Stdin))
+		scn.Split(scanLines)
+		go match(regex, "", opt, c, scn)
+		cc <- c
+	} else {
+		for _, s := range fnames {
+			c := make(chan string, 128)
+			cc <- c
+			go search(regex, s, opt, c)
+		}
+	}
+	close(cc)
+	wg.Wait()
 }
