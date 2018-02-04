@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	// "github.com/iriri/minimal/color" // more NIH syndrome coming soon
 	"github.com/iriri/minimal/flag"
@@ -127,10 +128,23 @@ func isBinary(f *os.File) bool {
 	return !utf8.Valid(buf[:n])
 }
 
+func scanLines(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	if i := bytes.IndexByte(data, '\n'); i >= 0 {
+		return i + 1, data[:i+1], nil
+	}
+	if atEOF {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
+}
+
 func match(r *regexp.Regexp, fname string, opt *flagSet, c chan string,
 	scn *bufio.Scanner) {
 	var l string
-	s := []string{fname, " ", "", ": ", ""}
+	s := []string{fname, ":", "", ": ", ""}
 	if fname == "" {
 		s[1] = ""
 	}
@@ -157,8 +171,10 @@ func match(r *regexp.Regexp, fname string, opt *flagSet, c chan string,
 func search(r *regexp.Regexp, fname string, opt *flagSet, c chan string) {
 	f, err := os.Open(fname)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "invalid filepath, probably\n")
-		panic(err)
+		fmt.Fprintf(os.Stderr, "error opening %s: %s\n", fname,
+			err.(*os.PathError).Err)
+		close(c)
+		return
 	}
 	defer f.Close()
 	if opt.I && isBinary(f) {
@@ -167,6 +183,7 @@ func search(r *regexp.Regexp, fname string, opt *flagSet, c chan string) {
 	}
 
 	scn := bufio.NewScanner(bufio.NewReader(f))
+	scn.Split(scanLines)
 	match(r, fname, opt, c, scn)
 }
 
@@ -178,6 +195,7 @@ func main() {
 	if isPiped() {
 		cs = append(cs, make(chan string, 16))
 		scn := bufio.NewScanner(bufio.NewReader(os.Stdin))
+		scn.Split(scanLines)
 		go match(regex, "", opt, cs[0], scn)
 	} else {
 		for i, s := range fnames {
@@ -186,9 +204,11 @@ func main() {
 		}
 	}
 
+	w := bufio.NewWriter(os.Stdout)
+	defer w.Flush()
 	for _, c := range cs {
 		for s := range c {
-			fmt.Println(s)
+			w.WriteString(s)
 		}
 	}
 }
