@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	// "github.com/iriri/minimal/color" // more NIH syndrome coming soon
+	"github.com/iriri/minimal/color"
 	"github.com/iriri/minimal/flag"
 	"github.com/iriri/minimal/gitignore"
 	"io"
@@ -28,7 +28,7 @@ type flagSet struct {
 	r bool
 	v bool
 	// bcpl  bool
-	// color bool
+	color  bool
 	fibers int
 	git    bool
 }
@@ -45,7 +45,7 @@ func parseFlags() (int, *flagSet) {
 	flag.Bool(&opt.r, false, "gorp directories recursively", "", 'r')
 	flag.Bool(&opt.v, false, "invert match", "", 'v')
 	// flag.Bool(&opt.bcpl, false, "curly brace mode", "bcpl", 0)
-	// flag.Bool(&opt.color, false, "highlight matches", "color", 0)
+	flag.Bool(&opt.color, false, "highlight matches", "color", 0)
 	flag.Int(&opt.fibers, 4, "files to search concurrently", "fibers", 0)
 	flag.Bool(&opt.git, false, "ignore files in .gitignore", "git", 0)
 	return flag.Parse(1), &opt
@@ -99,7 +99,7 @@ func setOptions(first int, opt *flagSet) (*regexp.Regexp, []string) {
 		}
 		for _, s := range os.Args[first+1:] {
 			if ign != nil {
-				err = gitignore.Walk(s, ign, true, fn)
+				err = gitignore.Walk(s, ign, false, fn)
 			} else {
 				err = filepath.Walk(s, fn)
 			}
@@ -144,6 +144,10 @@ func scanLines(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	return 0, nil, nil
 }
 
+func colorize(s string) string {
+	return color.Cyan + s + color.Reset
+}
+
 func match(r *regexp.Regexp, fname string, opt *flagSet, c chan string,
 	scn *bufio.Scanner) {
 	var l string
@@ -157,9 +161,16 @@ func match(r *regexp.Regexp, fname string, opt *flagSet, c chan string,
 		} else {
 			l = scn.Text()
 		}
-		if (!opt.v && r.FindString(l) != "") ||
-			(opt.v && r.FindString(l) == "") {
-			if opt.n {
+		if r.MatchString(l) != opt.v {
+			if opt.color {
+				if opt.n {
+					s[2] = strconv.Itoa(n)
+					s[4] = r.ReplaceAllStringFunc(l, colorize)
+					c <- strings.Join(s, "")
+				} else {
+					c <- r.ReplaceAllStringFunc(l, colorize)
+				}
+			} else if opt.n {
 				s[2] = strconv.Itoa(n)
 				s[4] = scn.Text()
 				c <- strings.Join(s, "")
