@@ -51,12 +51,12 @@ func parseFlags() (int, *flagSet) {
 	return flag.Parse(1), &opt
 }
 
-func isPiped() bool {
-	stat, err := os.Stdin.Stat()
+func isCharDevice(f *os.File) bool {
+	stat, err := f.Stat()
 	if err != nil {
 		panic(err)
 	}
-	return (stat.Mode() & os.ModeCharDevice) == 0
+	return (stat.Mode() & os.ModeCharDevice) != 0
 }
 
 func setOptions(first int, opt *flagSet) (*regexp.Regexp, []string) {
@@ -71,7 +71,7 @@ func setOptions(first int, opt *flagSet) (*regexp.Regexp, []string) {
 		fmt.Fprintf(os.Stderr, "invalid regexp, probably\n")
 		panic(err)
 	}
-	if isPiped() {
+	if !isCharDevice(os.Stdin) {
 		return regex, os.Args[0:1]
 	}
 
@@ -131,7 +131,7 @@ func isBinary(f *os.File) bool {
 	return !utf8.Valid(buf[:n])
 }
 
-func scanLines(data []byte, atEOF bool) (advance int, token []byte, err error) {
+func scanLines(data []byte, atEOF bool) (int, []byte, error) {
 	if atEOF && len(data) == 0 {
 		return 0, nil, nil
 	}
@@ -155,6 +155,7 @@ func match(r *regexp.Regexp, fname string, opt *flagSet, c chan string,
 	if fname == "" {
 		s[1] = ""
 	}
+	charDev := isCharDevice(os.Stdout)
 	for n := 1; scn.Scan(); n++ {
 		if opt.i {
 			l = strings.ToLower(scn.Text())
@@ -162,13 +163,15 @@ func match(r *regexp.Regexp, fname string, opt *flagSet, c chan string,
 			l = scn.Text()
 		}
 		if r.MatchString(l) != opt.v {
-			if opt.color {
+			if opt.color && charDev {
 				if opt.n {
 					s[2] = strconv.Itoa(n)
-					s[4] = r.ReplaceAllStringFunc(l, colorize)
+					s[4] = r.ReplaceAllStringFunc(l,
+						colorize)
 					c <- strings.Join(s, "")
 				} else {
-					c <- r.ReplaceAllStringFunc(l, colorize)
+					c <- r.ReplaceAllStringFunc(l,
+						colorize)
 				}
 			} else if opt.n {
 				s[2] = strconv.Itoa(n)
@@ -220,18 +223,18 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go write(cc, &wg)
-	if isPiped() {
-		c := make(chan string, 128)
-		scn := bufio.NewScanner(bufio.NewReader(os.Stdin))
-		scn.Split(scanLines)
-		go match(regex, "", opt, c, scn)
-		cc <- c
-	} else {
+	if isCharDevice(os.Stdin) {
 		for _, s := range fnames {
 			c := make(chan string, 128)
 			cc <- c
 			go search(regex, s, opt, c)
 		}
+	} else {
+		c := make(chan string, 128)
+		scn := bufio.NewScanner(bufio.NewReader(os.Stdin))
+		scn.Split(scanLines)
+		go match(regex, "", opt, c, scn)
+		cc <- c
 	}
 	close(cc)
 	wg.Wait()
