@@ -30,10 +30,11 @@ type flagSet struct {
 	v bool
 	x bool
 	// bcpl   bool
-	color  bool
-	fibers int
-	git    bool
-	trim   bool
+	color     bool
+	fibers    int
+	git       bool
+	trim      bool
+	charDevIn bool
 }
 
 func parseFlags() (int, *flagSet) {
@@ -76,13 +77,16 @@ func setOptions(first int, opt *flagSet) (*regexp.Regexp, *regexp.Regexp,
 		iregex, _ = regexp.Compile("(?i)" + os.Args[first])
 	} else {
 		regex, err = regexp.Compile(os.Args[first])
+		iregex = regex
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 		os.Exit(2)
 	}
-	if !isCharDevice(os.Stdin) {
+	if !isCharDevice(os.Stdout) {
 		opt.color = false
+	}
+	if !opt.charDevIn {
 		return regex, iregex, os.Args[0:1]
 	}
 
@@ -228,7 +232,9 @@ func write(cc chan chan string, wg *sync.WaitGroup) {
 
 func main() {
 	first, opt := parseFlags()
-	if first+2 > len(os.Args) {
+	opt.charDevIn = isCharDevice(os.Stdin)
+	if first+1 > len(os.Args) ||
+		(first+2 > len(os.Args) && opt.charDevIn) {
 		fmt.Fprintf(os.Stderr, "not enough arguments\n")
 		os.Exit(1)
 	}
@@ -238,7 +244,7 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go write(cc, &wg)
-	if isCharDevice(os.Stdin) {
+	if opt.charDevIn {
 		for _, s := range fnames {
 			c := make(chan string, 128)
 			cc <- c
