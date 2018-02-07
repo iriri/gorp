@@ -9,6 +9,7 @@ import (
 	"github.com/iriri/minimal/gitignore"
 	"io"
 	"os"
+	"os/user"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -27,10 +28,12 @@ type flagSet struct {
 	n bool
 	r bool
 	v bool
-	// bcpl  bool
+	x bool
+	// bcpl   bool
 	color  bool
 	fibers int
 	git    bool
+	trim   bool
 }
 
 func parseFlags() (int, *flagSet) {
@@ -44,10 +47,12 @@ func parseFlags() (int, *flagSet) {
 	flag.Bool(&opt.n, false, "print filenames and line numbers", "", 'n')
 	flag.Bool(&opt.r, false, "gorp directories recursively", "", 'r')
 	flag.Bool(&opt.v, false, "invert match", "", 'v')
+	flag.Bool(&opt.x, false, "match whole lines only", "", 'x')
 	// flag.Bool(&opt.bcpl, false, "curly brace mode", "bcpl", 0)
 	flag.Bool(&opt.color, false, "highlight matches", "color", 0)
 	flag.Int(&opt.fibers, 4, "files to search concurrently", "fibers", 0)
 	flag.Bool(&opt.git, false, "ignore files in .gitignore", "git", 0)
+	flag.Bool(&opt.trim, false, "trim whitespace", "trim", 0)
 	return flag.Parse(1), &opt
 }
 
@@ -59,20 +64,26 @@ func isCharDevice(f *os.File) bool {
 	return (stat.Mode() & os.ModeCharDevice) != 0
 }
 
-func setOptions(first int, opt *flagSet) (*regexp.Regexp, []string) {
-	var s string
-	if opt.i {
-		s = strings.ToLower(os.Args[first])
-	} else {
-		s = os.Args[first]
+func setOptions(first int, opt *flagSet) (*regexp.Regexp, *regexp.Regexp,
+	[]string) {
+	var regex, iregex *regexp.Regexp
+	var err error
+	if opt.x {
+		os.Args[first] = "^" + os.Args[first] + "\r?\n?$"
 	}
-	regex, err := regexp.Compile(s)
+	if opt.i {
+		regex, err = regexp.Compile(strings.ToLower(os.Args[first]))
+		iregex, _ = regexp.Compile("(?i)" + os.Args[first])
+	} else {
+		regex, err = regexp.Compile(os.Args[first])
+	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "invalid regexp, probably\n")
-		panic(err)
+		fmt.Fprintf(os.Stderr, "%s\n", err)
+		os.Exit(2)
 	}
 	if !isCharDevice(os.Stdin) {
-		return regex, os.Args[0:1]
+		opt.color = false
+		return regex, iregex, os.Args[0:1]
 	}
 
 	var ign gitignore.Ignore
@@ -83,11 +94,14 @@ func setOptions(first int, opt *flagSet) (*regexp.Regexp, []string) {
 	}
 	if opt.git {
 		ign = gitignore.New()
+		ign.AppendStr(".git")
 		if _, err := os.Stat(".gitignore"); err == nil {
 			ign.Append(".gitignore")
 		}
-		if _, err := os.Stat("/.gitignore_global"); err == nil {
-			ign.Append("/.gitignore_global")
+		usr, _ := user.Current()
+		gitignGlobal := filepath.Join(usr.HomeDir, ".gitignore_global")
+		if _, err := os.Stat(gitignGlobal); err == nil {
+			ign.Append(gitignGlobal)
 		}
 	}
 
@@ -107,7 +121,7 @@ func setOptions(first int, opt *flagSet) (*regexp.Regexp, []string) {
 				panic(err)
 			}
 		}
-		return regex, fnames
+		return regex, iregex, fnames
 	} else if ign != nil {
 		fnames := make([]string, 0, len(os.Args[first+1:]))
 		for _, s := range os.Args[first+1:] {
@@ -115,10 +129,10 @@ func setOptions(first int, opt *flagSet) (*regexp.Regexp, []string) {
 				fnames = append(fnames, s)
 			}
 		}
-		return regex, fnames
+		return regex, iregex, fnames
 	}
 
-	return regex, os.Args[first+1:]
+	return regex, iregex, os.Args[first+1:]
 }
 
 func isBinary(f *os.File) bool {
@@ -144,48 +158,45 @@ func scanLines(data []byte, atEOF bool) (int, []byte, error) {
 	return 0, nil, nil
 }
 
-func colorize(s string) string {
-	return color.Cyan + s + color.Reset
+func format(s string, ir *regexp.Regexp, opt *flagSet) string {
+	if opt.trim {
+		s = strings.Trim(s, " \t")
+	}
+	if opt.color {
+		s = ir.ReplaceAllStringFunc(s, func(s string) string {
+			return color.BrightRed + s + color.Reset
+		})
+	}
+	return s
 }
 
-func match(r *regexp.Regexp, fname string, opt *flagSet, c chan string,
+func match(r, ir *regexp.Regexp, fname string, opt *flagSet, c chan string,
 	scn *bufio.Scanner) {
-	var l string
+	var matches bool
 	s := []string{fname, ":", "", ": ", ""}
 	if fname == "" {
 		s[1] = ""
 	}
-	charDev := isCharDevice(os.Stdout)
 	for n := 1; scn.Scan(); n++ {
 		if opt.i {
-			l = strings.ToLower(scn.Text())
+			matches = r.MatchString(strings.ToLower(scn.Text()))
 		} else {
-			l = scn.Text()
+			matches = r.MatchString(scn.Text())
 		}
-		if r.MatchString(l) != opt.v {
-			if opt.color && charDev {
-				if opt.n {
-					s[2] = strconv.Itoa(n)
-					s[4] = r.ReplaceAllStringFunc(l,
-						colorize)
-					c <- strings.Join(s, "")
-				} else {
-					c <- r.ReplaceAllStringFunc(l,
-						colorize)
-				}
-			} else if opt.n {
+		if matches != opt.v {
+			if opt.n {
 				s[2] = strconv.Itoa(n)
-				s[4] = scn.Text()
+				s[4] = format(scn.Text(), ir, opt)
 				c <- strings.Join(s, "")
 			} else {
-				c <- scn.Text()
+				c <- format(scn.Text(), ir, opt)
 			}
 		}
 	}
 	close(c)
 }
 
-func search(r *regexp.Regexp, fname string, opt *flagSet, c chan string) {
+func search(r, ir *regexp.Regexp, fname string, opt *flagSet, c chan string) {
 	f, err := os.Open(fname)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error opening %s: %s\n", fname,
@@ -201,7 +212,7 @@ func search(r *regexp.Regexp, fname string, opt *flagSet, c chan string) {
 
 	scn := bufio.NewScanner(bufio.NewReader(f))
 	scn.Split(scanLines)
-	match(r, fname, opt, c, scn)
+	match(r, ir, fname, opt, c, scn)
 }
 
 func write(cc chan chan string, wg *sync.WaitGroup) {
@@ -217,7 +228,11 @@ func write(cc chan chan string, wg *sync.WaitGroup) {
 
 func main() {
 	first, opt := parseFlags()
-	regex, fnames := setOptions(first, opt)
+	if first+2 > len(os.Args) {
+		fmt.Fprintf(os.Stderr, "not enough arguments\n")
+		os.Exit(1)
+	}
+	regex, iregex, fnames := setOptions(first, opt)
 
 	cc := make(chan chan string, opt.fibers)
 	var wg sync.WaitGroup
@@ -227,13 +242,13 @@ func main() {
 		for _, s := range fnames {
 			c := make(chan string, 128)
 			cc <- c
-			go search(regex, s, opt, c)
+			go search(regex, iregex, s, opt, c)
 		}
 	} else {
 		c := make(chan string, 128)
 		scn := bufio.NewScanner(bufio.NewReader(os.Stdin))
 		scn.Split(scanLines)
-		go match(regex, "", opt, c, scn)
+		go match(regex, iregex, "", opt, c, scn)
 		cc <- c
 	}
 	close(cc)
