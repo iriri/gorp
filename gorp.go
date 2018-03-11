@@ -39,21 +39,21 @@ type flagSet struct {
 
 func parseFlags() (int, *flagSet) {
 	var opt flagSet
-	// flag.Int(&opt.A, 0, "print lines after each match", "", 'A')
-	// flag.Int(&opt.B, 0, "print lines before each match", "", 'B')
-	// flag.Int(&opt.C, 0, "print lines around each match", "", 'C')
-	flag.Bool(&opt.I, false, "ignore binary files", "", 'I')
-	flag.Bool(&opt.g, false, "ignore files in .gorpignore", "", 'g')
-	flag.Bool(&opt.i, false, "case insensitive matching", "", 'i')
-	flag.Bool(&opt.n, false, "print filenames and line numbers", "", 'n')
-	flag.Bool(&opt.r, false, "gorp directories recursively", "", 'r')
-	flag.Bool(&opt.v, false, "invert match", "", 'v')
-	flag.Bool(&opt.x, false, "match whole lines only", "", 'x')
-	// flag.Bool(&opt.bcpl, false, "curly brace mode", "bcpl", 0)
-	flag.Bool(&opt.color, false, "highlight matches", "color", 0)
-	flag.Int(&opt.fibers, 4, "files to search concurrently", "fibers", 0)
-	flag.Bool(&opt.git, false, "ignore files in .gitignore", "git", 0)
-	flag.Bool(&opt.trim, false, "trim whitespace", "trim", 0)
+	// flag.Int(&opt.A, 'A', "", 0, "print lines after each match"
+	// flag.Int(&opt.B, 'B', "", 0, "print lines before each match")
+	// flag.Int(&opt.C, 'C', "", 0, "print lines around each match")
+	flag.Bool(&opt.I, 'I', "", false, "ignore binary files")
+	flag.Bool(&opt.g, 'g', "", false, "ignore files in .gorpignore")
+	flag.Bool(&opt.i, 'i', "", false, "case insensitive matching")
+	flag.Bool(&opt.n, 'n', "", false, "print filenames and line numbers")
+	flag.Bool(&opt.r, 'r', "", false, "gorp directories recursively")
+	flag.Bool(&opt.v, 'v', "", false, "invert match")
+	flag.Bool(&opt.x, 'x', "", false, "match whole lines only")
+	// flag.Bool(&opt.bcpl, 0, "bcpl", false, "curly brace mode")
+	flag.Bool(&opt.color, 0, "color", false, "highlight matches")
+	flag.Int(&opt.fibers, 0, "fibers", 4, "files to search concurrently")
+	flag.Bool(&opt.git, 0, "git", false, "ignore files in .gitignore")
+	flag.Bool(&opt.trim, 0, "trim", false, "trim whitespace")
 	return flag.Parse(1), &opt
 }
 
@@ -233,8 +233,8 @@ func write(cc chan chan string, wg *sync.WaitGroup) {
 func main() {
 	first, opt := parseFlags()
 	opt.charDevIn = isCharDevice(os.Stdin)
-	if first+1 > len(os.Args) ||
-		(first+2 > len(os.Args) && opt.charDevIn) {
+	if len(os.Args) < first+1 ||
+		(len(os.Args) < first+2 && opt.charDevIn) {
 		fmt.Fprintf(os.Stderr, "not enough arguments\n")
 		os.Exit(1)
 	}
