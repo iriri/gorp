@@ -98,7 +98,7 @@ func setOptions(first int, opt *flagSet) (*regexp.Regexp, *regexp.Regexp,
 	}
 	if opt.git {
 		ign = gitignore.New()
-		ign.AppendStr(".git")
+		ign.AppendGlob(".git")
 		if _, err := os.Stat(".gitignore"); err == nil {
 			ign.Append(".gitignore")
 		}
@@ -117,7 +117,7 @@ func setOptions(first int, opt *flagSet) (*regexp.Regexp, *regexp.Regexp,
 		}
 		for _, s := range os.Args[first+1:] {
 			if ign != nil {
-				err = gitignore.Walk(s, ign, false, fn)
+				err = ign.Walk(s, false, fn)
 			} else {
 				err = filepath.Walk(s, fn)
 			}
