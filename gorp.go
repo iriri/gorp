@@ -31,7 +31,7 @@ type flagSet struct {
 	x bool
 	// bcpl   bool
 	color     bool
-	fibers    int
+	fibers    int64
 	git       bool
 	trim      bool
 	charDevIn bool
@@ -39,9 +39,9 @@ type flagSet struct {
 
 func parseFlags() (int, *flagSet) {
 	var opt flagSet
-	// flag.Int(&opt.A, 'A', "", 0, "print lines after each match"
-	// flag.Int(&opt.B, 'B', "", 0, "print lines before each match")
-	// flag.Int(&opt.C, 'C', "", 0, "print lines around each match")
+	// flag.Int64(&opt.A, 'A', "", 0, "print lines after each match"
+	// flag.Int64(&opt.B, 'B', "", 0, "print lines before each match")
+	// flag.Int64(&opt.C, 'C', "", 0, "print lines around each match")
 	flag.Bool(&opt.I, 'I', "", false, "ignore binary files")
 	flag.Bool(&opt.g, 'g', "", false, "ignore files in .gorpignore")
 	flag.Bool(&opt.i, 'i', "", false, "case insensitive matching")
@@ -51,7 +51,7 @@ func parseFlags() (int, *flagSet) {
 	flag.Bool(&opt.x, 'x', "", false, "match whole lines only")
 	// flag.Bool(&opt.bcpl, 0, "bcpl", false, "curly brace mode")
 	flag.Bool(&opt.color, 0, "color", false, "highlight matches")
-	flag.Int(&opt.fibers, 0, "fibers", 4, "files to search concurrently")
+	flag.Int64(&opt.fibers, 0, "fibers", 4, "files to search concurrently")
 	flag.Bool(&opt.git, 0, "git", false, "ignore files in .gitignore")
 	flag.Bool(&opt.trim, 0, "trim", false, "trim whitespace")
 	return flag.Parse(1), &opt
