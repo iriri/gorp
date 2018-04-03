@@ -4,18 +4,18 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/iriri/minimal/color"
-	"github.com/iriri/minimal/flag"
-	"github.com/iriri/minimal/gitignore"
 	"io"
 	"os"
-	"os/user"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"unicode/utf8"
+
+	"github.com/iriri/minimal/color"
+	"github.com/iriri/minimal/flag"
+	"github.com/iriri/minimal/gitignore"
 )
 
 type flagSet struct {
@@ -90,22 +90,13 @@ func setOptions(first int, opt *flagSet) (*regexp.Regexp, *regexp.Regexp,
 		return regex, iregex, os.Args[0:1]
 	}
 
-	var ign gitignore.Ignore
-	if opt.g {
-		if _, err := os.Stat(".gorpignore"); err == nil {
-			ign, _ = gitignore.From(".gorpignore")
+	ign, err := gitignore.New()
+	if err == nil {
+		if opt.git {
+			ign.AppendGit()
 		}
-	}
-	if opt.git {
-		ign = gitignore.New()
-		ign.AppendGlob(".git")
-		if _, err := os.Stat(".gitignore"); err == nil {
-			ign.Append(".gitignore")
-		}
-		usr, _ := user.Current()
-		gitignGlobal := filepath.Join(usr.HomeDir, ".gitignore_global")
-		if _, err := os.Stat(gitignGlobal); err == nil {
-			ign.Append(gitignGlobal)
+		if opt.g {
+			ign.Append(".gorpignore")
 		}
 	}
 
@@ -117,7 +108,7 @@ func setOptions(first int, opt *flagSet) (*regexp.Regexp, *regexp.Regexp,
 		}
 		for _, s := range os.Args[first+1:] {
 			if ign != nil {
-				err = ign.Walk(s, false, fn)
+				err = ign.Walk(s, fn)
 			} else {
 				err = filepath.Walk(s, fn)
 			}
