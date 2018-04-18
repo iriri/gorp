@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -19,9 +18,9 @@ import (
 )
 
 type flagSet struct {
-	// A     int
-	// B     int
-	// C     int
+	// A         int
+	// B         int
+	// C         int
 	I bool
 	g bool
 	i bool
@@ -29,7 +28,7 @@ type flagSet struct {
 	r bool
 	v bool
 	x bool
-	// bcpl   bool
+	// fn        bool
 	color     bool
 	fibers    int64
 	git       bool
@@ -49,7 +48,7 @@ func parseFlags() (int, *flagSet) {
 	flag.Bool(&opt.r, 'r', "", false, "gorp directories recursively")
 	flag.Bool(&opt.v, 'v', "", false, "invert match")
 	flag.Bool(&opt.x, 'x', "", false, "match whole lines only")
-	// flag.Bool(&opt.bcpl, 0, "bcpl", false, "curly brace mode")
+	// flag.Bool(&opt.fn, 0, "fn", false, "print parent functions")
 	flag.Bool(&opt.color, 0, "color", false, "highlight matches")
 	flag.Int64(&opt.fibers, 0, "fibers", 4, "files to search concurrently")
 	flag.Bool(&opt.git, 0, "git", false, "ignore files in .gitignore")
@@ -107,17 +106,13 @@ func setOptions(first int, opt *flagSet) (*regexp.Regexp, *regexp.Regexp,
 			return err
 		}
 		for _, s := range os.Args[first+1:] {
-			if ign != nil {
-				err = ign.Walk(s, fn)
-			} else {
-				err = filepath.Walk(s, fn)
-			}
+			err = ign.Walk(s, fn)
 			if err != nil {
 				panic(err)
 			}
 		}
 		return regex, iregex, fnames
-	} else if ign != nil {
+	} else {
 		fnames := make([]string, 0, len(os.Args[first+1:]))
 		for _, s := range os.Args[first+1:] {
 			if !ign.Match(s) {
