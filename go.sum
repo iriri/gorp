@@ -1,0 +1,8 @@
+github.com/gobwas/glob v0.2.3 h1:A4xDbljILXROh+kObIiy5kIaPYD8e96x1tgBhUI5J+Y=
+github.com/gobwas/glob v0.2.3/go.mod h1:d3Ez4x06l9bZtSvzIay5+Yzi0fmZzPgnTbPcKjJAkT8=
+github.com/iriri/minimal/color v0.0.1 h1:Apdh45WmtTCgFPxlf8tDavAkeIYUN27gIzmrnW454H8=
+github.com/iriri/minimal/color v0.0.1/go.mod h1:Ux9kbT6UcAt51tQROoTD5OHM6R4mvQff1gEPPC6Fft8=
+github.com/iriri/minimal/flag v0.2.0 h1:n/TpCy/JDhlRmnesrK5yZrhVhs+JZ7YowuIljakA198=
+github.com/iriri/minimal/flag v0.2.0/go.mod h1:B09FxwL2ucfMVKNqoNjYQ3ScmL7AQxboD4nRVnDG/cY=
+github.com/iriri/minimal/gitignore v0.3.2 h1:MnTVH89iuwiyZ/a1pByw/mAU2ShWai1yvv0tgHSq5Ww=
+github.com/iriri/minimal/gitignore v0.3.2/go.mod h1:v7YhsYBAInyAnQligwCIGRuQmtwQyYxkVy5vEdy2wPU=

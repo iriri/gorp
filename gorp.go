@@ -21,14 +21,13 @@ type flagSet struct {
 	// A         int
 	// B         int
 	// C         int
-	I bool
-	g bool
-	i bool
-	n bool
-	r bool
-	v bool
-	x bool
-	// fn        bool
+	I         bool
+	g         bool
+	i         bool
+	n         bool
+	r         bool
+	v         bool
+	x         bool
 	color     bool
 	fibers    int64
 	git       bool
@@ -48,7 +47,6 @@ func parseFlags() (int, *flagSet) {
 	flag.Bool(&opt.r, 'r', "", false, "gorp directories recursively")
 	flag.Bool(&opt.v, 'v', "", false, "invert match")
 	flag.Bool(&opt.x, 'x', "", false, "match whole lines only")
-	// flag.Bool(&opt.fn, 0, "fn", false, "print parent functions")
 	flag.Bool(&opt.color, 0, "color", false, "highlight matches")
 	flag.Int64(&opt.fibers, 0, "fibers", 4, "files to search concurrently")
 	flag.Bool(&opt.git, 0, "git", false, "ignore files in .gitignore")
